@@ -1,0 +1,9 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`clone 1`] = `
+Rect {
+  "fixedAspectRatio": false,
+  "fixedScaleCenter": false,
+  "on": [Function],
+}
+`;
