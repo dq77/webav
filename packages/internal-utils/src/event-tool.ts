@@ -50,23 +50,23 @@ export class EventTool<T extends EventToolType> {
     };
   }
 
-  #listeners = new Map<keyof T, Set<T[keyof T]>>();
+  listeners = new Map<keyof T, Set<T[keyof T]>>();
 
   /**
    * 监听 EventType 中定义的事件
    */
   on = <Type extends keyof T>(type: Type, listener: T[Type]): (() => void) => {
-    const handlers = this.#listeners.get(type) ?? new Set<T[keyof T]>();
+    const handlers = this.listeners.get(type) ?? new Set<T[keyof T]>();
     handlers.add(listener);
 
-    if (!this.#listeners.has(type)) {
-      this.#listeners.set(type, handlers);
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, handlers);
     }
 
     return () => {
       handlers.delete(listener);
       if (handlers.size === 0) {
-        this.#listeners.delete(type);
+        this.listeners.delete(type);
       }
     };
   };
@@ -103,13 +103,13 @@ export class EventTool<T extends EventToolType> {
         : never
       : never
   ): void => {
-    const handlers = this.#listeners.get(type);
+    const handlers = this.listeners.get(type);
     if (handlers == null) return;
 
     handlers.forEach((handler) => handler(...args));
   };
 
   destroy(): void {
-    this.#listeners.clear();
+    this.listeners.clear();
   }
 }

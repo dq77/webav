@@ -43,7 +43,7 @@ export abstract class BaseSprite {
     playbackRate: 1,
   };
 
-  #evtTool = new EventTool<{
+  evtTool = new EventTool<{
     propsChange: (
       value: Partial<{ rect: Partial<Rect>; zIndex: number }>,
     ) => void;
@@ -53,7 +53,7 @@ export abstract class BaseSprite {
    * @example
    * sprite.on('propsChange', (changedProps) => {})
    */
-  on = this.#evtTool.on;
+  on = this.evtTool.on;
 
   #zIndex = 0;
   get zIndex(): number {
@@ -66,7 +66,7 @@ export abstract class BaseSprite {
   set zIndex(v: number) {
     const changed = this.#zIndex !== v;
     this.#zIndex = v;
-    if (changed) this.#evtTool.emit('propsChange', { zIndex: v });
+    if (changed) this.evtTool.emit('propsChange', { zIndex: v });
   }
 
   /**
@@ -90,7 +90,7 @@ export abstract class BaseSprite {
 
   constructor() {
     this.rect.on('propsChange', (props) => {
-      this.#evtTool.emit('propsChange', { rect: props });
+      this.evtTool.emit('propsChange', { rect: props });
     });
   }
 
@@ -196,7 +196,7 @@ export abstract class BaseSprite {
   }
 
   protected destroy() {
-    this.#evtTool.destroy();
+    this.evtTool.destroy();
   }
 }
 

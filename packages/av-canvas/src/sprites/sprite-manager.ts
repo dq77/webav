@@ -7,25 +7,16 @@ export enum ESpriteManagerEvt {
 }
 
 export class SpriteManager {
-  #sprites: VisibleSprite[] = [];
+  sprites: VisibleSprite[] = [];
 
-  #activeSprite: VisibleSprite | null = null;
+  activeSprite: VisibleSprite | null = null;
 
-  #evtTool = new EventTool<{
+  evtTool = new EventTool<{
     [ESpriteManagerEvt.AddSprite]: (s: VisibleSprite) => void;
     [ESpriteManagerEvt.ActiveSpriteChange]: (s: VisibleSprite | null) => void;
   }>();
 
-  on = this.#evtTool.on;
-
-  get activeSprite(): VisibleSprite | null {
-    return this.#activeSprite;
-  }
-  set activeSprite(s: VisibleSprite | null) {
-    if (s === this.#activeSprite) return;
-    this.#activeSprite = s;
-    this.#evtTool.emit(ESpriteManagerEvt.ActiveSpriteChange, s);
-  }
+  on = this.evtTool.on;
 
   activeSpriteByCoord(x: number, y: number): void {
     this.activeSprite =
@@ -33,28 +24,35 @@ export class SpriteManager {
         // 排在后面的层级更高
         .reverse()
         .find((s) => s.visible && s.rect.checkHit(x, y)) ?? null;
+    this.evtTool.emit(ESpriteManagerEvt.ActiveSpriteChange, this.activeSprite);
   }
 
   async addSprite(vs: VisibleSprite): Promise<void> {
     await vs.ready;
-    this.#sprites.push(vs);
-    this.#sprites = this.#sprites.sort((a, b) => a.zIndex - b.zIndex);
+    this.sprites.push(vs);
+    this.sprites = this.sprites.sort((a, b) => a.zIndex - b.zIndex);
     vs.on('propsChange', (props) => {
       if (props.zIndex == null) return;
-      this.#sprites = this.#sprites.sort((a, b) => a.zIndex - b.zIndex);
+      this.sprites = this.sprites.sort((a, b) => a.zIndex - b.zIndex);
     });
 
-    this.#evtTool.emit(ESpriteManagerEvt.AddSprite, vs);
+    this.evtTool.emit(ESpriteManagerEvt.AddSprite, vs);
   }
 
   removeSprite(spr: VisibleSprite): void {
-    if (this.#activeSprite === spr) this.activeSprite = null;
-    this.#sprites = this.#sprites.filter((s) => s !== spr);
+    if (this.activeSprite === spr) {
+      this.activeSprite = null;
+      this.evtTool.emit(
+        ESpriteManagerEvt.ActiveSpriteChange,
+        this.activeSprite,
+      );
+    }
+    this.sprites = this.sprites.filter((s) => s !== spr);
     spr.destroy();
   }
 
   getSprites(filter: { time: boolean } = { time: true }): VisibleSprite[] {
-    return this.#sprites.filter(
+    return this.sprites.filter(
       (s) =>
         s.visible &&
         (filter.time
@@ -75,12 +73,16 @@ export class SpriteManager {
       (time < as.time.offset || time > as.time.offset + as.time.duration)
     ) {
       this.activeSprite = null;
+      this.evtTool.emit(
+        ESpriteManagerEvt.ActiveSpriteChange,
+        this.activeSprite,
+      );
     }
   }
 
   destroy(): void {
-    this.#evtTool.destroy();
-    this.#sprites.forEach((s) => s.destroy());
-    this.#sprites = [];
+    this.evtTool.destroy();
+    this.sprites.forEach((s) => s.destroy());
+    this.sprites = [];
   }
 }

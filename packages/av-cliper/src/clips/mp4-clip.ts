@@ -68,7 +68,7 @@ export class MP4Clip implements IClip {
 
   ready: IClip['ready'];
 
-  #destroyed = false;
+  destroyed = false;
 
   #meta = {
     // 微秒
@@ -109,8 +109,8 @@ export class MP4Clip implements IClip {
 
   #audioSamples: ExtMP4Sample[] = [];
 
-  #videoFrameFinder: VideoFrameFinder | null = null;
-  #audioFrameFinder: AudioFrameFinder | null = null;
+  videoFrameFinder: VideoFrameFinder | null = null;
+  audioFrameFinder: AudioFrameFinder | null = null;
 
   #decoderConf: {
     video: VideoDecoderConfig | null;
@@ -183,8 +183,8 @@ export class MP4Clip implements IClip {
           audioSamples,
           this.#opts.audio !== false ? this.#volume : 0,
         );
-        this.#videoFrameFinder = videoFrameFinder;
-        this.#audioFrameFinder = audioFrameFinder;
+        this.videoFrameFinder = videoFrameFinder;
+        this.audioFrameFinder = audioFrameFinder;
 
         this.#meta = genMeta(decoderConf, videoSamples, audioSamples);
         this.#log.info('MP4Clip meta:', this.#meta);
@@ -216,14 +216,14 @@ export class MP4Clip implements IClip {
   }> {
     if (time >= this.#meta.duration) {
       return await this.tickInterceptor(time, {
-        audio: (await this.#audioFrameFinder?.find(time)) ?? [],
+        audio: (await this.audioFrameFinder?.find(time)) ?? [],
         state: 'done',
       });
     }
 
     const [audio, video] = await Promise.all([
-      this.#audioFrameFinder?.find(time) ?? [],
-      this.#videoFrameFinder?.find(time),
+      this.audioFrameFinder?.find(time) ?? [],
+      this.videoFrameFinder?.find(time),
     ]);
 
     if (video == null) {
@@ -438,12 +438,12 @@ export class MP4Clip implements IClip {
   }
 
   destroy(): void {
-    if (this.#destroyed) return;
-    this.#log.info('MP4Clip destroy');
-    this.#destroyed = true;
+    if (this.destroyed) return;
+    console.log('MP4Clip destroy');
+    this.destroyed = true;
 
-    this.#videoFrameFinder?.destroy();
-    this.#audioFrameFinder?.destroy();
+    this.videoFrameFinder?.destroy();
+    this.audioFrameFinder?.destroy();
   }
 }
 
@@ -641,7 +641,7 @@ function normalizeTimescale(
 }
 
 class VideoFrameFinder {
-  #dec: VideoDecoder | null = null;
+  dec: VideoDecoder | null = null;
   constructor(
     public localFileReader: LocalFileReader,
     public samples: ExtMP4Sample[],
@@ -649,22 +649,22 @@ class VideoFrameFinder {
   ) {}
 
   #ts = 0;
-  #curAborter = { abort: false, st: performance.now() };
+  curAborter = { abort: false, st: performance.now() };
   find = async (time: number): Promise<VideoFrame | null> => {
     if (
-      this.#dec == null ||
-      this.#dec.state === 'closed' ||
+      this.dec == null ||
+      this.dec.state === 'closed' ||
       time <= this.#ts ||
       time - this.#ts > 3e6
     ) {
       this.#reset(time);
     }
 
-    this.#curAborter.abort = true;
+    this.curAborter.abort = true;
     this.#ts = time;
 
-    this.#curAborter = { abort: false, st: performance.now() };
-    const vf = await this.#parseFrame(time, this.#dec, this.#curAborter);
+    this.curAborter = { abort: false, st: performance.now() };
+    const vf = await this.#parseFrame(time, this.dec, this.curAborter);
     this.#sleepCnt = 0;
     return vf;
   };
@@ -674,7 +674,7 @@ class VideoFrameFinder {
 
   #downgradeSoftDecode = false;
   #videoDecCusorIdx = 0;
-  #videoFrames: VideoFrame[] = [];
+  videoFrames: VideoFrame[] = [];
   #outputFrameCnt = 0;
   #inputChunkCnt = 0;
   #sleepCnt = 0;
@@ -686,18 +686,18 @@ class VideoFrameFinder {
   ): Promise<VideoFrame | null> => {
     if (dec == null || dec.state === 'closed' || aborter.abort) return null;
 
-    if (this.#videoFrames.length > 0) {
-      const vf = this.#videoFrames[0];
+    if (this.videoFrames.length > 0) {
+      const vf = this.videoFrames[0];
       if (time < vf.timestamp) return null;
       // 弹出第一帧
-      this.#videoFrames.shift();
+      this.videoFrames.shift();
       // 第一帧过期，找下一帧
       if (time > vf.timestamp + (vf.duration ?? 0)) {
         vf.close();
         return await this.#parseFrame(time, dec, aborter);
       }
 
-      if (!this.#predecodeErr && this.#videoFrames.length < 10) {
+      if (!this.#predecodeErr && this.videoFrames.length < 10) {
         // 预解码 避免等待
         this.#startDecode(dec).catch((err) => {
           this.#predecodeErr = true;
@@ -798,8 +798,8 @@ class VideoFrameFinder {
 
   #reset = (time?: number) => {
     this.#decoding = false;
-    this.#videoFrames.forEach((f) => f.close());
-    this.#videoFrames = [];
+    this.videoFrames.forEach((f) => f.close());
+    this.videoFrames = [];
     if (time == null || time === 0) {
       this.#videoDecCusorIdx = 0;
     } else {
@@ -814,14 +814,14 @@ class VideoFrameFinder {
     }
     this.#inputChunkCnt = 0;
     this.#outputFrameCnt = 0;
-    if (this.#dec?.state !== 'closed') this.#dec?.close();
+    if (this.dec?.state !== 'closed') this.dec?.close();
     const encoderConf = {
       ...this.conf,
       ...(this.#downgradeSoftDecode
         ? { hardwareAcceleration: 'prefer-software' }
         : {}),
     } as VideoDecoderConfig;
-    this.#dec = new VideoDecoder({
+    this.dec = new VideoDecoder({
       output: (vf) => {
         this.#outputFrameCnt += 1;
         if (vf.timestamp === -1) {
@@ -835,12 +835,12 @@ class VideoFrameFinder {
           });
           vf.close();
         }
-        this.#videoFrames.push(rsVf);
+        this.videoFrames.push(rsVf);
       },
       error: (err) => {
         if (err.message.includes('Codec reclaimed due to inactivity')) {
           // todo:  因无活动被自动关闭的解码器，是否需要自动重启？
-          this.#dec = null;
+          this.dec = null;
           Log.warn(err.message);
           return;
         }
@@ -850,18 +850,18 @@ class VideoFrameFinder {
         throw Error(errMsg);
       },
     });
-    this.#dec.configure(encoderConf);
+    this.dec.configure(encoderConf);
   };
 
   #getState = () => ({
     time: this.#ts,
-    decState: this.#dec?.state,
-    decQSize: this.#dec?.decodeQueueSize,
+    decState: this.dec?.state,
+    decQSize: this.dec?.decodeQueueSize,
     decCusorIdx: this.#videoDecCusorIdx,
     sampleLen: this.samples.length,
     inputCnt: this.#inputChunkCnt,
     outputCnt: this.#outputFrameCnt,
-    cacheFrameLen: this.#videoFrames.length,
+    cacheFrameLen: this.videoFrames.length,
     softDeocde: this.#downgradeSoftDecode,
     clipIdCnt: CLIP_ID,
     sleepCnt: this.#sleepCnt,
@@ -869,11 +869,11 @@ class VideoFrameFinder {
   });
 
   destroy = () => {
-    if (this.#dec?.state !== 'closed') this.#dec?.close();
-    this.#dec = null;
-    this.#curAborter.abort = true;
-    this.#videoFrames.forEach((f) => f.close());
-    this.#videoFrames = [];
+    if (this.dec?.state !== 'closed') this.dec?.close();
+    this.dec = null;
+    this.curAborter.abort = true;
+    this.videoFrames.forEach((f) => f.close());
+    this.videoFrames = [];
     this.localFileReader.close();
   };
 }
@@ -902,11 +902,11 @@ class AudioFrameFinder {
     this.#sampleRate = opts.targetSampleRate;
   }
 
-  #dec: ReturnType<typeof createAudioChunksDecoder> | null = null;
-  #curAborter = { abort: false, st: performance.now() };
+  dec: ReturnType<typeof createAudioChunksDecoder> | null = null;
+  curAborter = { abort: false, st: performance.now() };
   find = async (time: number): Promise<Float32Array[]> => {
     const needResetTime = time <= this.#ts || time - this.#ts > 0.1e6;
-    if (this.#dec == null || this.#dec.state === 'closed' || needResetTime) {
+    if (this.dec == null || this.dec.state === 'closed' || needResetTime) {
       this.#reset();
     }
 
@@ -917,16 +917,16 @@ class AudioFrameFinder {
       this.#decCusorIdx = findIndexOfSamples(time, this.samples);
     }
 
-    this.#curAborter.abort = true;
+    this.curAborter.abort = true;
     const deltaTime = time - this.#ts;
     this.#ts = time;
 
-    this.#curAborter = { abort: false, st: performance.now() };
+    this.curAborter = { abort: false, st: performance.now() };
 
     const pcmData = await this.#parseFrame(
       Math.ceil(deltaTime * (this.#sampleRate / 1e6)),
-      this.#dec,
-      this.#curAborter,
+      this.dec,
+      this.curAborter,
     );
     this.#sleepCnt = 0;
     return pcmData;
@@ -934,7 +934,7 @@ class AudioFrameFinder {
 
   #ts = 0;
   #decCusorIdx = 0;
-  #pcmData: {
+  pcmData: {
     frameCnt: number;
     data: [Float32Array, Float32Array][];
   } = {
@@ -957,13 +957,13 @@ class AudioFrameFinder {
     }
 
     // 数据满足需要
-    const ramainFrameCnt = this.#pcmData.frameCnt - emitFrameCnt;
+    const ramainFrameCnt = this.pcmData.frameCnt - emitFrameCnt;
     if (ramainFrameCnt > 0) {
       // 剩余音频数据小于 100ms，预先解码
       if (ramainFrameCnt < DEFAULT_AUDIO_CONF.sampleRate / 10) {
         this.#startDecode(dec);
       }
-      return emitAudioFrames(this.#pcmData, emitFrameCnt);
+      return emitAudioFrames(this.pcmData, emitFrameCnt);
     }
 
     if (dec.decoding) {
@@ -978,7 +978,7 @@ class AudioFrameFinder {
       await sleep(15);
     } else if (this.#decCusorIdx >= this.samples.length - 1) {
       // 最后片段，返回剩余数据
-      return emitAudioFrames(this.#pcmData, this.#pcmData.frameCnt);
+      return emitAudioFrames(this.pcmData, this.pcmData.frameCnt);
     } else {
       this.#startDecode(dec);
     }
@@ -1016,40 +1016,40 @@ class AudioFrameFinder {
   #reset = () => {
     this.#ts = 0;
     this.#decCusorIdx = 0;
-    this.#pcmData = {
+    this.pcmData = {
       frameCnt: 0,
       data: [],
     };
-    this.#dec?.close();
-    this.#dec = createAudioChunksDecoder(
+    this.dec?.close();
+    this.dec = createAudioChunksDecoder(
       this.conf,
       {
         resampleRate: DEFAULT_AUDIO_CONF.sampleRate,
         volume: this.#volume,
       },
       (pcmArr) => {
-        this.#pcmData.data.push(pcmArr as [Float32Array, Float32Array]);
-        this.#pcmData.frameCnt += pcmArr[0].length;
+        this.pcmData.data.push(pcmArr as [Float32Array, Float32Array]);
+        this.pcmData.frameCnt += pcmArr[0].length;
       },
     );
   };
 
   #getState = () => ({
     time: this.#ts,
-    decState: this.#dec?.state,
-    decQSize: this.#dec?.decodeQueueSize,
+    decState: this.dec?.state,
+    decQSize: this.dec?.decodeQueueSize,
     decCusorIdx: this.#decCusorIdx,
     sampleLen: this.samples.length,
-    pcmLen: this.#pcmData.frameCnt,
+    pcmLen: this.pcmData.frameCnt,
     clipIdCnt: CLIP_ID,
     sleepCnt: this.#sleepCnt,
     memInfo: memoryUsageInfo(),
   });
 
   destroy = () => {
-    this.#dec = null;
-    this.#curAborter.abort = true;
-    this.#pcmData = {
+    this.dec = null;
+    this.curAborter.abort = true;
+    this.pcmData = {
       frameCnt: 0,
       data: [],
     };

@@ -65,7 +65,7 @@ function createInitCvsEl(resolution: IResolution): HTMLCanvasElement {
 export class AVCanvas {
   #cvsEl: HTMLCanvasElement;
 
-  #spriteManager: SpriteManager;
+  spriteManager: SpriteManager;
 
   #cvsCtx: CanvasRenderingContext2D;
 
@@ -114,15 +114,15 @@ export class AVCanvas {
     // 避免首次渲染时 ctrls 节点大小不符合期望，所以这里不需要它的返回值
     getRectCtrls(this.#cvsEl, { x: 0, y: 0, w: 0, h: 0 } as Rect);
 
-    this.#spriteManager = new SpriteManager();
+    this.spriteManager = new SpriteManager();
 
     this.#clears.push(
       // 鼠标样式、控制 sprite 依赖 activeSprite，
       // activeSprite 需要在他们之前监听到 mousedown 事件 (代码顺序需要靠前)
-      activeSprite(this.#cvsEl, this.#spriteManager),
-      renderCtrls(container, this.#cvsEl, this.#spriteManager),
-      draggabelSprite(this.#cvsEl, this.#spriteManager, container),
-      this.#spriteManager.on(ESpriteManagerEvt.AddSprite, (s) => {
+      activeSprite(this.#cvsEl, this.spriteManager),
+      renderCtrls(container, this.#cvsEl, this.spriteManager),
+      draggabelSprite(this.#cvsEl, this.spriteManager, container),
+      this.spriteManager.on(ESpriteManagerEvt.AddSprite, (s) => {
         const { rect } = s;
         // 默认居中
         if (rect.x === 0 && rect.y === 0) {
@@ -130,7 +130,7 @@ export class AVCanvas {
           rect.y = (this.#cvsEl.height - rect.h) / 2;
         }
       }),
-      EventTool.forwardEvent(this.#spriteManager, this.#evtTool, [
+      EventTool.forwardEvent(this.spriteManager, this.#evtTool, [
         ESpriteManagerEvt.ActiveSpriteChange,
       ]),
     );
@@ -162,7 +162,7 @@ export class AVCanvas {
   #renderTime = 0e6;
   #updateRenderTime(time: number) {
     this.#renderTime = time;
-    this.#spriteManager.updateRenderTime(time);
+    this.spriteManager.updateRenderTime(time);
     this.#autoPreFrame.updateTime(time);
   }
 
@@ -197,7 +197,7 @@ export class AVCanvas {
     }
 
     const ctxDestAudioData: Float32Array[][] = [];
-    for (const s of this.#spriteManager.getSprites()) {
+    for (const s of this.spriteManager.getSprites()) {
       cvsCtx.save();
       const { audio } = s.render(cvsCtx, ts - s.time.offset);
       cvsCtx.restore();
@@ -247,7 +247,7 @@ export class AVCanvas {
    * @throws 如果开始时间大于等于结束时间或小于 0，则抛出错误
    */
   play(opts: { start: number; end?: number; playbackRate?: number }) {
-    const spriteTimes = this.#spriteManager
+    const spriteTimes = this.spriteManager
       .getSprites({ time: false })
       .map((s) => s.time.offset + s.time.duration);
     const end =
@@ -281,7 +281,7 @@ export class AVCanvas {
         readyVS.clear();
       },
       updateTime: throttle((curTime: number) => {
-        const sprs = this.#spriteManager.getSprites({ time: false });
+        const sprs = this.spriteManager.getSprites({ time: false });
         // 匹配接下来 1s 内即将要播放的 Sprite
         const matchPreSprs = sprs.filter((vs) => {
           const { offset } = vs.time;
@@ -306,7 +306,7 @@ export class AVCanvas {
    * 预览 `AVCanvas` 指定时间的图像帧
    */
   previewFrame(time: number) {
-    this.#spriteManager.getSprites().forEach((vs) => {
+    this.spriteManager.getSprites().forEach((vs) => {
       vs.preFrame(time - vs.time.offset);
     });
     this.#updateRenderTime(time);
@@ -321,13 +321,13 @@ export class AVCanvas {
   }
 
   get activeSprite() {
-    return this.#spriteManager.activeSprite;
+    return this.spriteManager.activeSprite;
   }
   set activeSprite(s: VisibleSprite | null) {
-    this.#spriteManager.activeSprite = s;
+    this.spriteManager.activeSprite = s;
   }
 
-  #sprMapAudioNode = new WeakMap<VisibleSprite, AudioNode>();
+  sprMapAudioNode = new WeakMap<VisibleSprite, AudioNode>();
   /**
    * 添加 {@link VisibleSprite}
    * @param args {@link VisibleSprite}
@@ -349,9 +349,9 @@ export class AVCanvas {
         new MediaStream([clip.audioTrack]),
       );
       audioNode.connect(this.#captureAudioDest);
-      this.#sprMapAudioNode.set(vs, audioNode);
+      this.sprMapAudioNode.set(vs, audioNode);
     }
-    await this.#spriteManager.addSprite(vs);
+    await this.spriteManager.addSprite(vs);
   };
   /**
    * 删除 {@link VisibleSprite}
@@ -362,8 +362,8 @@ export class AVCanvas {
    * avCvs.removeSprite(sprite);
    */
   removeSprite: SpriteManager['removeSprite'] = (vs) => {
-    this.#sprMapAudioNode.get(vs)?.disconnect();
-    this.#spriteManager.removeSprite(vs);
+    this.sprMapAudioNode.get(vs)?.disconnect();
+    this.spriteManager.removeSprite(vs);
   };
 
   /**
@@ -380,7 +380,7 @@ export class AVCanvas {
     this.#cvsEl.parentElement?.remove();
     this.#clears.forEach((fn) => fn());
     this.#playingAudioCache.clear();
-    this.#spriteManager.destroy();
+    this.spriteManager.destroy();
   }
 
   /**
@@ -424,7 +424,7 @@ export class AVCanvas {
     Log.info('AVCanvas.createCombinator, opts:', opts);
 
     const com = new Combinator({ ...this.#opts, ...opts });
-    const sprites = this.#spriteManager.getSprites({ time: false });
+    const sprites = this.spriteManager.getSprites({ time: false });
     if (sprites.length === 0) throw Error('No sprite added');
 
     for (const vs of sprites) {

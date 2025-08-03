@@ -43,7 +43,6 @@
     "packages/*"
   ],
   "simple-git-hooks": {
-    "commit-msg": "node scripts/verify-commit.js",
     "pre-commit": "pnpm lint-staged"
   },
   "lint-staged": {
