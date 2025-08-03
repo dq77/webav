@@ -42,9 +42,6 @@
   "workspaces": [
     "packages/*"
   ],
-  "simple-git-hooks": {
-    "pre-commit": "pnpm lint-staged"
-  },
   "lint-staged": {
     "*.{json,ts,tsx,js,md}": [
       "npx prettier --write"
